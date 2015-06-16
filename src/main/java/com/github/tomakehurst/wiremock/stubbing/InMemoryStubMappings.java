@@ -40,7 +40,8 @@ public class InMemoryStubMappings implements StubMappings {
 				mappings,
 				mappingMatchingAndInCorrectScenarioState(request),
 				StubMapping.NOT_CONFIGURED);
-		
+
+		matchingMapping.notifyScenarioState(notifier());
 		notifyIfResponseNotConfigured(request, matchingMapping);
 		matchingMapping.updateScenarioStateIfRequired();
 		return copyOf(matchingMapping.getResponse());
