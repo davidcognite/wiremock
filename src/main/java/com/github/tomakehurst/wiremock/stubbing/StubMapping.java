@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize.Inclusion;
 import com.github.tomakehurst.wiremock.common.Json;
+import com.github.tomakehurst.wiremock.common.Notifier;
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
 import com.github.tomakehurst.wiremock.matching.RequestPattern;
 
@@ -141,7 +142,16 @@ public class StubMapping {
 			scenario.setState(newScenarioState);
 		}
 	}
-	
+
+	public void notifyScenarioState(Notifier notifier) {
+		if (isInScenario()) {
+			notifier.info("Scenario: " + getScenarioName());
+			notifier.info("State: " + scenario.getState());
+		} else {
+			notifier.info("No Scenario set");
+		}
+	}
+
 	@JsonIgnore
 	public Scenario getScenario() {
 		return scenario;
