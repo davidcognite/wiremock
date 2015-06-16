@@ -27,6 +27,7 @@ import com.github.tomakehurst.wiremock.verification.VerificationResult;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 
 import java.util.List;
+import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.common.Json.write;
 import static com.github.tomakehurst.wiremock.common.LocalNotifier.notifier;
@@ -40,6 +41,8 @@ public class StubMappingJsonRecorder implements RequestListener {
     private final Admin admin;
     private final List<CaseInsensitiveKey> headersToMatch;
     private IdGenerator idGenerator;
+    private  String scenarioName = "Recorded";
+    private String state = Scenario.STARTED;
 
     public StubMappingJsonRecorder(FileSource mappingsFileSource, FileSource filesFileSource, Admin admin, List<CaseInsensitiveKey> headersToMatch) {
         this.mappingsFileSource = mappingsFileSource;
@@ -52,10 +55,19 @@ public class StubMappingJsonRecorder implements RequestListener {
     @Override
     public void requestReceived(Request request, Response response) {
         RequestPattern requestPattern = buildRequestPatternFrom(request);
+        boolean updateState = false;
 
-        if (requestNotAlreadyReceived(requestPattern) && response.isFromProxy()) {
+        if (!request.getMethod().equals(RequestMethod.GET)) {
+            // Update the state when writing the mapping
+            updateState = true;
+
+            // Reset journal store
+            admin.resetRequests();
+        }
+
+        if (requestNotAlreadyReceived(requestPattern, response) && response.isFromProxy()) {
             notifier().info(String.format("Recording mappings for %s", request.getUrl()));
-            writeToMappingAndBodyFile(request, response, requestPattern);
+            writeToMappingAndBodyFile(request, response, requestPattern, updateState);
         } else {
             notifier().info(String.format("Not recording mapping for %s as this has already been received", request.getUrl()));
         }
@@ -93,7 +105,8 @@ public class StubMappingJsonRecorder implements RequestListener {
         return ValuePattern.equalTo(request.getBodyAsString());
     }
 
-    private void writeToMappingAndBodyFile(Request request, Response response, RequestPattern requestPattern) {
+    private void writeToMappingAndBodyFile(Request request, Response response, RequestPattern requestPattern, boolean updateState) {
+
         String fileId = idGenerator.generate();
         String mappingFileName = UniqueFilenameGenerator.generate(request, "mapping", fileId);
         String bodyFileName = UniqueFilenameGenerator.generate(request, "body", fileId);
@@ -107,11 +120,19 @@ public class StubMappingJsonRecorder implements RequestListener {
 
         StubMapping mapping = new StubMapping(requestPattern, responseToWrite);
 
+        mapping.setScenarioName(scenarioName);
+        mapping.setRequiredScenarioState(state);
+
+        if (updateState) {
+            state = UUID.randomUUID().toString();
+            mapping.setNewScenarioState(state);
+        }
+
         filesFileSource.writeBinaryFile(bodyFileName, response.getBody());
         mappingsFileSource.writeTextFile(mappingFileName, write(mapping));
     }
 
-    private boolean requestNotAlreadyReceived(RequestPattern requestPattern) {
+    private boolean requestNotAlreadyReceived(RequestPattern requestPattern, Response response) {
         VerificationResult verificationResult = admin.countRequestsMatching(requestPattern);
         verificationResult.assertRequestJournalEnabled();
         return (verificationResult.getCount() <= 1);
